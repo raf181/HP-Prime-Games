@@ -1,0 +1,253 @@
+|a��������?����lD�@theDeck����lD�@deckSize����lD�@totalChips����lD�@currentBet����lD�@justShuffled����lD�@cardTotal����lD�@cardCount����lD�@aceCount����lD�@hiddenCard����lD�@player����lD�@dealer����lD�@black����lD�@white����lD�@red����lD�@green����lD�@yellow�����>TD@Blackjack�	TD@DealACard�TD@DrawACard�TD@DrawInitialCards�TD@DrawTheTable�TD@GetCardName�TD@Initialize�TD@NewGame�TD@PayTheWinner�TD@ShuffleTheDeck�TD@WaitForMenuChoice� 6�@6D�@���5��#pragma mode( separator(.,;) integer(h32) )
+
+// Blackjack for the HP Prime
+// Author  : Geoff
+// Version : v1.0
+
+
+  // Make these varibles generally available so they don't have to be passed at every subroutine call
+LOCAL theDeck, deckSize, totalChips, currentBet, justShuffled;
+LOCAL cardTotal, cardCount, aceCount, hiddenCard;
+LOCAL player, dealer, black, white, red, green, yellow;
+
+
+  // List of subroutines so the compiler knows what's defined later.
+DealACard();
+DrawACard();
+DrawInitialCards();
+DrawTheTable();
+GetCardName();
+Initialize();
+NewGame();
+PayTheWinner();
+ShuffleTheDeck();
+WaitForMenuChoice();
+
+
+EXPORT Blackjack()
+BEGIN
+  LOCAL newBet, theCard, menuChoice;
+  Initialize();
+  ShuffleTheDeck();
+  REPEAT
+    NewGame();
+    DrawTheTable();
+    REPEAT
+      menuChoice := WaitForMenuChoice({"Bet", "Deal", "", "", "", "Quit"});
+      CASE
+        IF menuChoice == "Bet" THEN
+          INPUT({{newBet, [0]}}, "Change the bet", "New bet:", "Input new bet. Must be less than $" + totalChips);
+          newBet := IP(newBet);
+          IF newBet > 0 AND newBet <= totalChips THEN
+            currentBet := newBet;
+          END;
+          DrawTheTable();
+        END;
+        IF menuChoice == "Quit" THEN
+          BREAK(2);
+        END;
+      END;
+    UNTIL menuChoice == "Deal";
+    DrawInitialCards();
+    IF cardTotal(dealer) < 21 THEN
+      REPEAT
+        menuChoice := WaitForMenuChoice({"", "", "Hit", "Stand", "", "Quit"});
+        CASE
+          IF menuChoice == "Hit" THEN
+            theCard := DealACard(player);
+            DrawACard(theCard, player);
+            IF cardTotal(player) > 21 THEN
+              menuChoice := "Stand";
+            END;
+          END;
+          IF menuChoice == "Quit" THEN
+            BREAK(2);
+          END;
+        END;
+      UNTIL menuChoice == "Stand";
+    END;
+    DrawACard(hiddenCard, dealer);
+    WHILE cardTotal(dealer) < 17 DO
+      theCard := DealACard(dealer);
+      DrawACard(theCard, dealer);
+    END;
+    IF length(theDeck) < 20 THEN
+      ShuffleTheDeck();
+    END;
+    PayTheWinner();
+    IF totalChips > 0 THEN
+      menuChoice := WaitForMenuChoice({"", "", "", "", "Again", "Quit"});
+    ELSE
+      TEXTOUT_P(" Gone Bust !! ", 100, 107, 2, yellow, 200, black);
+      WAIT(3);
+      menuChoice := "Quit";
+    END;
+  UNTIL menuChoice == "Quit";
+END;
+
+
+DealACard(who)
+BEGIN
+  LOCAL theCard, valueList, value;
+  theCard := head(theDeck);
+  theDeck := tail(theDeck);
+  valueList := {11, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10};
+  value := valueList(((theCard - 1) MOD 13) + 1);
+  cardTotal(who) := cardTotal(who) + value;
+  cardCount(who) := cardCount(who) + 1;
+  IF value == 11 THEN
+    aceCount(who) := aceCount(who) + 1;
+  END;
+  IF cardTotal(who) > 21 AND aceCount(who) > 0 THEN
+    cardTotal(who) := cardTotal(who) - 10;
+    aceCount(who) := aceCount(who) - 1;
+  END;
+  RETURN theCard;
+END;
+
+
+DrawACard(theCard, who)
+BEGIN
+  RECT_P(G1, 0, 0, 36, 58, black, white);
+  IF theCard == 0 THEN
+    RECT_P(G1, 5, 5, 31, 52, RGB(0, 0, 128));
+  ELSE
+    TEXTOUT_P(GetCardName(theCard), G1, 3, 2, 2, IFTE(theCard < 27, black, red));
+    ROTATE(G1, IFTE(HAngle == 0, PI, 180), black);
+    TEXTOUT_P(GetCardName(theCard), G1, 3, 2, 2, IFTE(theCard < 27, black, red));
+  END;
+    // Round the corners slightly
+  FILLPOLY_P(G1, {(0, 0), (1, 0), (0, 1)}, green); LINE_P(G1, 0, 2, 2, 0, black);
+  FILLPOLY_P(G1, {(36, 0), (36, 1), (35, 0)}, green); LINE_P(G1, 36, 2, 34, 0, black);
+  FILLPOLY_P(G1, {(36, 58), (35, 58), (36, 57)}, green); LINE_P(G1, 36, 56, 34, 58, black);
+  FILLPOLY_P(G1, {(0, 58), (0, 57), (1, 58)}, green); LINE_P(G1, 0, 56, 2, 58, black);
+  BLIT_P(G0, -30 + 50 * cardCount(who), 195 - 75 * who, G1);
+    // Short pause to look more like real dealing.
+  WAIT(0.1);
+END;
+
+
+DrawInitialCards()
+BEGIN
+  LOCAL theCard;
+  RECT_P(100, 105, 200, 115, green);  // Erase shuffle message
+  theCard := DealACard(player);
+  DrawACard(theCard, player);
+  theCard := DealACard(dealer);
+  DrawACard(theCard, dealer);
+  theCard := DealACard(player);
+  DrawACard(theCard, player);
+  theCard := DealACard(dealer);
+  hiddenCard := theCard;
+  DrawACard(0, dealer);
+END;
+
+
+DrawTheTable()
+BEGIN
+  RECT_P(G0, green);
+  TEXTOUT_P("BlackJack v1.0  -  by Geoff", 75, 3, 2, white);
+  TEXTOUT_P("DEALER", 10, 25, 2, yellow);
+  TEXTOUT_P("PLAYER", 10, 185, 2, yellow);
+  TEXTOUT_P("Total Chips : $" + totalChips + "      Bet : $" + currentBet, 75, 205, 2, white);
+  IF justShuffled == "Yes" THEN
+    TEXTOUT_P("SHUFFLED", 100, 105, 2, white);
+    justShuffled := "No";
+  END;
+END;
+
+
+GetCardName(theCard)
+BEGIN
+  LOCAL name, nameList, suit, suitList;
+  nameList := {"A","2","3","4","5","6","7","8","9","10","J","Q","K"};
+  suitList := {"c&","`&","f&","e&"};
+  name := nameList(((theCard - 1) MOD 13) + 1);
+  suit := IP((theCard - 1) / 13) + 1;
+  suit := suitList(((suit - 1) MOD 4) + 1);
+  RETURN name + suit;
+END;
+
+
+Initialize()
+BEGIN
+  DIMGROB_P(G1, 37, 59);
+  player := 1;
+  dealer := 2;
+  totalChips := 1000;
+  currentBet := 100;
+  deckSize := 104;
+  black  := RGB(0, 0, 0);
+  red    := RGB(255, 0, 0);
+  white  := RGB(255, 255, 255);
+  green  := RGB(0, 128, 0);
+  yellow := RGB(255, 255, 0);
+END;
+
+
+NewGame()
+BEGIN
+  cardTotal := [0, 0];
+  cardCount := [0, 0];
+  aceCount  := [0, 0];
+END;
+
+
+PayTheWinner()
+BEGIN
+  CASE
+    IF cardTotal(player) > 21 THEN
+      totalChips := totalChips - currentBet;
+      TEXTOUT_P(" BUST ", G0, 90, 185, 2, white, 100, black);
+    END;
+    IF cardTotal(player) == 21 AND cardCount(player) == 2 THEN
+      IF NOT(cardTotal(dealer) == 21 AND cardCount(dealer) == 2) THEN
+        totalChips := totalChips + IP(1.5 * currentBet);
+        TEXTOUT_P(" BLACKJACK ", 90, 185, 2, white, 100, black);
+      ELSE
+        TEXTOUT_P(" PUSH ", 90, 185, 2, white, 100, black);
+      END;
+    END;
+    IF cardTotal(dealer) > 21 THEN
+      totalChips := totalChips + currentBet;
+      TEXTOUT_P(" WINNER ", 90, 185, 2, white, 100, black);
+    END;
+    IF cardTotal(player) > cardTotal(dealer) THEN
+      totalChips := totalChips + currentBet;
+      TEXTOUT_P(" WINNER ", 90, 185, 2, white, 100, black);
+    END;
+    IF cardTotal(dealer) > cardTotal(player) THEN
+      totalChips := totalChips - currentBet;
+      TEXTOUT_P(" WINNER ", 90, 25, 2, white, 100, black);
+    END;
+    DEFAULT
+      TEXTOUT_P(" PUSH ", 90, 185, 2, white, 100, black);
+  END;
+  TEXTOUT_P("Total Chips : $" + totalChips + "      Bet : $" + currentBet + "     ", 75, 205, 2, white, 300, green);
+END;
+
+
+ShuffleTheDeck()
+BEGIN
+  theDeck := randperm(deckSize);
+  justShuffled := "Yes";
+END;
+
+
+WaitForMenuChoice(menuList)
+BEGIN
+  LOCAL event, choice;
+  choice := "";
+  DRAWMENU(menuList);
+  REPEAT
+    event := WAIT(-1);
+    IF TYPE(event) == 6 THEN
+      IF event(1) == 3 THEN
+        IF event(3) > 219 THEN
+          choice := menuList(IP(event(2) / 53.3) + 1);
+        END;
+      END;
+    END;
+  UNTIL choice <> "";
+  RETURN choice;
+END;��@XD�@����������XD�@����������XD�@����������XD�@����������XD�@����������XD�@����������XD�@����������XD�@����������XD�@����������XD�@����������
